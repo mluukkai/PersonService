@@ -24,62 +24,63 @@ public class App {
         MongoClient mongo = new MongoClient(uri);
         // jos käytät lokaalia mongoa, luo client seuraavasti
         //MongoClient mongo = new MongoClient();
-        
-        morphia.mapPackage("com.mycompany.domain");   
+
+        morphia.mapPackage("com.mycompany.domain");
         // vaihda seuraavaan sama kun kannan nimi kuin mongourlissa
         Datastore datastore = morphia.createDatastore(mongo, "kanta1");
-        
+
         Set<String> validTokens = new HashSet<>();
 
         get("/ping", (request, response) -> {
             String name = ManagementFactory.getRuntimeMXBean().getName();
             String dir = System.getProperty("user.dir");
-            return name+" "+dir; 
-        });         
-        
+
+            return "{ \"name\": \""+name+"\", \"dir\": \""+dir+"\" }";
+        });
+
         before("/persons", (request, response) -> {
-            if ( request.requestMethod().equals("GET") && 
+            if ( request.requestMethod().equals("GET") &&
                  !validTokens.contains(request.headers("Authorization") ) ){
                 halt(401, gson.toJson(Error.withCause("missing or invalid token")));
             }
-        }); 
-        
+        });
+
         get("/persons", (request, response) -> {
-            return datastore.find(Person.class).asList(); 
-        }, new JsonTransformer());      
-        
+            return datastore.find(Person.class).asList();
+        }, new JsonTransformer());
+
         post("/persons", (request, response) -> {
             Person person = gson.fromJson(request.body(), Person.class);
-            
+
             if ( person == null || !person.valid()) {
                 halt(400, gson.toJson(Error.withCause("all fields must have a value")));
             }
-            
+
             if ( datastore.createQuery(Person.class).field("username").equal(person.username()).get() != null ){
                 halt(400, gson.toJson(Error.withCause("username must be unique")));
             }
-            
-            datastore.save(person);            
+
+            datastore.save(person);
             return person;
-        }, new JsonTransformer());       
-    
+        }, new JsonTransformer());
+
         post("/session", (request, response) -> {
             Person dataInRequest = gson.fromJson(request.body(), Person.class);
-           
+
             Person person = datastore.createQuery(Person.class).field("username").equal(dataInRequest.username()).get();
-            
+
             if ( person==null || !person.password().equals(dataInRequest.password()) ) {
                 halt(401, gson.toJson(Error.withCause( "invalid credentials")));
-            } 
-               
+            }
+
             Token token = Token.generate();
             validTokens.add(token.toString());
             return token;
-        }, new JsonTransformer());                       
-        
+        }, new JsonTransformer());
+
         after((request, response) -> {
             response.type("application/json");
-        });    
-    
+        });
+
     }
 }
